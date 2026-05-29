@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Piezoelektrik Etki Simülasyonu (Dark Mode)</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #121212; /* Çok karanlık arka plan */
+            color: #e0e0e0; /* Açık gri metin */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+        }
+        .container {
+            background: #1e1e1e; /* Koyu gri panel */
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(255,255,255,0.05); /* Çok hafif beyaz gölge */
+            text-align: center;
+            max-width: 600px;
+            width: 100%;
+        }
+        canvas {
+            background-color: #252525; /* Panelden biraz daha koyu canvas */
+            border: 1px solid #444; /* Koyu gri kenarlık */
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        .controls {
+            margin-top: 25px;
+            text-align: left;
+        }
+        label {
+            font-weight: bold;
+            display: block;
+            margin-bottom: 8px;
+            color: #b0b0b0; /* Etiketler için biraz daha sönük gri */
+        }
+        input[type="range"] {
+            width: 100%;
+            margin-bottom: 20px;
+            /* Kaydırıcının görünürlüğü için bazı tarayıcılarda gerekebilir */
+            accent-color: #3498db; 
+        }
+        .metrics {
+            display: flex;
+            justify-content: space-between;
+            background: #333; /* Panelden daha koyu gösterge alanı */
+            padding: 15px;
+            border-radius: 8px;
+            font-weight: bold;
+            color: #fff; /* Gösterge metinleri tam beyaz */
+        }
+        .radio-group {
+            margin-bottom: 20px;
+        }
+        /* Radyo butonlarının metin renkleri */
+        .radio-group label {
+            color: #e0e0e0;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Piezoelektrik Etki Simülasyonu</h2>
+    <p style="color: #a0a0a0;">Kristal kafesindeki asimetrinin yüklere etkisi.</p>
+    
+    <div class="metrics">
+        <span id="voltageDisplay">Üretilen Voltaj: 0 V</span>
+        <span id="strainDisplay">Mekanik Gerinim: 0%</span>
+    </div>
+
+    <canvas id="simCanvas" width="500" height="300"></canvas>
+
+    <div class="controls">
+        <div class="radio-group">
+            <input type="radio" id="directMode" name="mode" value="direct" checked onchange="resetSlider()">
+            <label for="directMode" style="display:inline;">Doğrudan Etki (Mekanik Baskı Uygula)</label><br><br>
+            
+            <input type="radio" id="converseMode" name="mode" value="converse" onchange="resetSlider()">
+            <label for="converseMode" style="display:inline;">Ters Etki (Elektrik Voltajı Uygula)</label>
+        </div>
+
+        <label id="sliderLabel" for="mainSlider">Uygulanan Kuvvet:</label>
+        <input type="range" id="mainSlider" min="-100" max="100" value="0" oninput="updateSim()">
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('simCanvas');
+    const ctx = canvas.getContext('2d');
+    const slider = document.getElementById('mainSlider');
+    const sliderLabel = document.getElementById('sliderLabel');
+    const voltageDisplay = document.getElementById('voltageDisplay');
+    const strainDisplay = document.getElementById('strainDisplay');
+    
+    function resetSlider() {
+        slider.value = 0;
+        updateSim();
+    }
+
+    function drawLattice(offset, mode) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        
+        let scaleY = 1;
+        let chargeOffset = 0;
+
+        if (mode === 'direct') {
+            scaleY = 1 + (offset / 400); 
+            chargeOffset = offset / 3;   
+            
+            voltageDisplay.innerText = `Üretilen Voltaj: ${(offset * 15).toFixed(0)} V`;
+            strainDisplay.innerText = `Mekanik Gerinim: ${(offset / 4).toFixed(1)}%`;
+            sliderLabel.innerText = "Uygulanan Kuvvet (Sıkıştırma / Çekme):";
+        } else {
+            chargeOffset = offset / 2;   
+            scaleY = 1 + (offset / 300); 
+            
+            voltageDisplay.innerText = `Uygulanan Voltaj: ${(offset * 10).toFixed(0)} V`;
+            strainDisplay.innerText = `Mekanik Gerinim: ${(offset / 3).toFixed(1)}%`;
+            sliderLabel.innerText = "Uygulanan Elektrik Alan (Voltaj):";
+        }
+
+        ctx.save();
+        ctx.translate(centerX, centerY);
+        ctx.scale(1, scaleY);
+        
+        // Asimetrik Kristal Yapı Çizimi (Karanlık tema için daha sönük çizgiler)
+        ctx.beginPath();
+        ctx.moveTo(0, -100);
+        ctx.lineTo(80, -50);
+        ctx.lineTo(80, 50);
+        ctx.lineTo(0, 100);
+        ctx.lineTo(-80, 50);
+        ctx.lineTo(-80, -50);
+        ctx.closePath();
+        ctx.strokeStyle = '#666'; /* Koyu gri çizgiler */
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Eksi Yükler (Mavi)
+        ctx.fillStyle = '#3498db';
+        const negPositions = [[0, -100], [80, -50], [80, 50], [0, 100], [-80, 50], [-80, -50]];
+        negPositions.forEach(pos => {
+            ctx.beginPath();
+            ctx.arc(pos[0], pos[1], 15, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = 'white'; /* Yük işaretleri beyaz kalabilir */
+            ctx.fillText("-", pos[0] - 4, pos[1] + 4);
+            ctx.fillStyle = '#3498db';
+        });
+
+        // Artı Yük (Kırmızı)
+        ctx.fillStyle = '#e74c3c';
+        ctx.beginPath();
+        ctx.arc(0, 0 + chargeOffset, 20, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'white';
+        ctx.font = "16px Arial";
+        ctx.fillText("+", -4, chargeOffset + 5);
+
+        ctx.restore();
+    }
+
+    function updateSim() {
+        const mode = document.querySelector('input[name="mode"]:checked').value;
+        const val = parseInt(slider.value);
+        drawLattice(val, mode);
+    }
+
+    updateSim();
+</script>
+
+</body>
+</html>
